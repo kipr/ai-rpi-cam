@@ -22,6 +22,9 @@ extern "C"
 
 using namespace std;
 
+/*debug */void HexDump(const void* mem, unsigned int size);
+
+
 #define VIDEO_CODEC "libx264"
 
 KIPRnet::KIPRnet() : abort_video_(false)
@@ -119,7 +122,6 @@ cout << "KIPRencode - objects found: " << object_count << " Header size: " << he
 
         }
 
-
 	EncodeBuffer(buffer->planes()[0].fd.get(), span.size(), mem, info, timestamp_ns / 1000, header_buff);
 
 	// Tell our caller that encoding is underway.
@@ -171,7 +173,7 @@ void KIPRnet::EncodeBuffer(int fd, size_t size, void *mem, StreamInfo const &inf
 #define FRAME_WIDTH 640
 #define FRAME_INTERVAL (1000 / 30)
 #define PACK_SIZE 4096 //udp pack size; note that OSX limits < 8100 bytes
-#define ENCODE_QUALITY 80
+#define ENCODE_QUALITY 95
 
 void KIPRnet::videoThread()
 {
@@ -223,22 +225,9 @@ void KIPRnet::videoThread()
 		cvLinesizes[0] = frameMAT.step1();
 
 		SwsContext *conversion = sws_getContext(width, height, (AVPixelFormat)frameAV->format, width, height,
-								AVPixelFormat::AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+							AVPixelFormat::AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 		sws_scale(conversion, frameAV->data, frameAV->linesize, 0, height, &frameMAT.data, cvLinesizes);
 		sws_freeContext(conversion);
-
-#ifdef OnMODe
-		BufferWriteSync w(app_, completed_request->buffers[stream_]);
-		libcamera::Span<uint8_t> buffer = w.Get()[0];
-		uint32_t *ptr = (uint32_t *)buffer.data();
-		StreamInfo info = app_->GetStreamInfo(stream_);
-
-		std::vector<Detection> detections;
-
-		completed_request->post_process_metadata.Get("object_detect.results", detections);
-
-		cv::Mat image(info.height, info.width, CV_8U, ptr, info.stride);
-#endif /**/
 
 		int jpegqual = ENCODE_QUALITY; // Compression Parameter
 		UDPSocket sock;
@@ -250,20 +239,31 @@ void KIPRnet::videoThread()
 		std::vector<int> compression_params;
 		compression_params.push_back(cv::IMWRITE_JPEG_QUALITY);
 		compression_params.push_back(jpegqual);
-		imencode(".png", send, encoded, compression_params);
-		//imshow("send", send);
+		imencode(".jpg", send, encoded, compression_params);
+		//imencode(".png", send, encoded, compression_params);
+
 		int total_pack = 1 + (encoded.size() - 1) / PACK_SIZE;
+		int image_size = encoded.size();
+
 /*debug*/       int object_count;
 		memcpy(&object_count, header_buffer->buffer + sizeof(int), sizeof(int));
 
-		memcpy(header_buffer->buffer, &total_pack, sizeof(int));
+		//memcpy(header_buffer->buffer, &total_pack, sizeof(int));
+		memcpy(header_buffer->buffer, &image_size, sizeof(int));
 
 		sock.sendTo(header_buffer->buffer, header_buffer->length, "192.168.1.1", 9000);
-		cout << "KIPR - sending frame " << total_pack << " object_count: " << object_count << " Header size: " << header_buffer->length << " header_seq " << header_buffer->header_seq << endl;
+		cout << "KIPR - sending frame " << total_pack << " object_count: " << object_count << " Header size: " << header_buffer->length << " header_seq " << header_buffer->header_seq << "image_size: " << image_size << endl;
+
+/*DEBUG*/	//HexDump(&encoded[0], 16);
 		if (video_output == 1)
 		{
 			for (int i = 0; i < total_pack; i++)
-				sock.sendTo(&encoded[i * PACK_SIZE], PACK_SIZE, "192.168.1.1", 9000);
+			{
+				int packet_size;
+				packet_size = PACK_SIZE;
+
+				sock.sendTo(&encoded[i * PACK_SIZE], packet_size, "192.168.1.1", 9000);
+			}
 		}
 		av_frame_free(&frameAV);
 		free(header_buffer->buffer);
@@ -291,3 +291,21 @@ extern "C" void KIPRnet::releaseBuffer(void *opaque, uint8_t *data)
 		enc->drm_frame_queue_.pop();
 #endif
 }
+/*DEBUG remove for production */
+
+void HexDump(const void* mem, unsigned int size) {
+    // Cast the void pointer to an unsigned char pointer for byte-level access
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(mem);
+
+    for (unsigned int i = 0; i < size; ++i) {
+        // Print the byte in hexadecimal format, with a width of 2 and leading zeros
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(p[i]) << " ";
+
+        // Add a newline every 16 bytes for better readability
+        if ((i + 1) % 16 == 0) {
+            std::cout << std::endl;
+        }
+    }
+    std::cout << std::dec << std::endl; // Reset to decimal output
+}
+

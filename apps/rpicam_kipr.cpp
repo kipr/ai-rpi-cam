@@ -22,6 +22,8 @@
 #include "core/rpicam_encoder.hpp"
 #include "output/output.hpp"
 
+#include <opencv4/opencv2/opencv.hpp>
+
 #define AI_VIDEO_COMMAND_PORT 5556
 #define MAX_UDP_BUFF_LEN 4096
 
@@ -288,6 +290,8 @@ int main(int argc, char *argv[])
 {
 
 	// initialize command variables
+
+/*DEBUG*/std::cout << cv::getBuildInformation() << std::endl;
 
 	try
 	{
