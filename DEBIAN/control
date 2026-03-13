@@ -1,5 +1,5 @@
 Package: rpicam-apps-kipr
-Version: 0.1.1-trixie
+Version: 0.2.1-trixie
 Architecture: arm64
 Maintainer: KIPR <info@kipr.org>
 Depends: libopencv-imgcodecs410, libswscale8, libavcodec61, libopencv-objdetect410, libavdevice61, libcamera0.5, libboost-program-options1.83.0, libexif12, imx500-firmware

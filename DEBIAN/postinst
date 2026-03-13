@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+printf "systemd autostart disabled for dev build\nENABLE FOR PROD"
+exit 0
+
 UNIT="rpicam-kipr.service"
 
 if [ "${1}" = "configure" ]; then
