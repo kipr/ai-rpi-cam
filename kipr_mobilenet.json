@@ -1,0 +1,36 @@
+{
+    “kipr_object_detection”:
+    {
+        “max_detections” : 5,
+        “threshold” : 0.6,
+        “network_file”: “/home/test/model_cups/network.rpk”,
+
+        // Don't touch this
+        “save_input_tensor”:
+        {
+            “filename”: “/home/test/input_tensor.raw”,
+            “num_tensors”: 10
+        },
+
+        “temporal_filter”:
+        {
+            “tolerance”: 0.1,
+            “factor”: 0.2,
+            “visible_frames”: 4,
+            “hidden_frames”: 2
+        },
+
+        “classes”:
+        [
+                “blue”,
+                “green”,
+                “pink”
+        ]
+    },
+
+    // Can comment out for prod if drawing in BotUI/libwallaby
+    “object_detect_draw_cv”:
+    {
+        “line_thickness” : 2
+    }
+}
