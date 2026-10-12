@@ -257,11 +257,22 @@ Rectangle KIPRPostProcessingStage::ConvertInferenceCoordinates(const std::vector
 		case MODEL_TYPE::YOLO11n:
 		case MODEL_TYPE::nano:
                 {
-                        // YOLO11n support (bbox = xy)
-                        obj.x = coords[1] * isp_output_size.width / Input_Tensor_width;
-                        obj.y = coords[0] * isp_output_size.height / Input_Tensor_height;
-                        obj.width = coords[3] * isp_output_size.width / Input_Tensor_width;
-                        obj.height = coords[2] * isp_output_size.height / Input_Tensor_height;
+			 // YOLO11n support (bbox = xy)
+
+			if(bbox_normalization == XY)
+			{
+				obj.x = coords[0] * isp_output_size.width / Input_Tensor_width;
+				obj.y = coords[1] * isp_output_size.height / Input_Tensor_height;
+				obj.width = coords[2] * isp_output_size.width / Input_Tensor_width;
+				obj.height = coords[3] * isp_output_size.height / Input_Tensor_height;
+			}
+			else
+			{
+				obj.x = coords[0] * isp_output_size.width / Input_Tensor_width;
+				obj.y = coords[1] * isp_output_size.height / Input_Tensor_height;
+				obj.width = coords[3] * isp_output_size.width / Input_Tensor_width;
+				obj.height = coords[2] * isp_output_size.height / Input_Tensor_height;
+			}
 
                         LOG(2, "integer object: " << obj);
                         return obj;

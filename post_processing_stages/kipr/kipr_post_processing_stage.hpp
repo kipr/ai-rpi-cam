@@ -49,7 +49,7 @@ public:
 		XY
 	};
 
-#define BBOX_NORMALIZATION_DEFAULT "xy"
+#define BBOX_NORMALIZATION_DEFAULT "yx"
 
 	MODEL_TYPE model;
 	BBOX_NORMALIZATION_TYPE bbox_normalization;
