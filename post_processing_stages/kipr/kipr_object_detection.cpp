@@ -135,11 +135,9 @@ bool ObjectDetection::Process(CompletedRequestPtr &completed_request)
 	// Process() can be concurrently called through different threads for consecutive CompletedRequests if
 	// things are running behind.  So protect access to the lt_objects_ state object.
 	std::scoped_lock<std::mutex> l(lt_lock_);
-	//LOG(1, "KIPR ObjectionDetection");
 
 	if (output && info)
 	{
-		//LOG(1, "KIPR - output tensor found");
 		std::vector<float> output_tensor(output->data(), output->data() + output->size());
 		CnnOutputTensorInfo output_tensor_info = *reinterpret_cast<const CnnOutputTensorInfo *>(info->data());
 
@@ -169,7 +167,6 @@ bool ObjectDetection::Process(CompletedRequestPtr &completed_request)
 	}
 	else
 	{
-	//LOG(1, "KIPR - No output tensor");
 		// No output tensor, so simply reuse the results from the lt_objects_.
 		for (auto const &obj : lt_objects_)
 		{
@@ -270,7 +267,11 @@ int ObjectDetection::processOutputTensor(std::vector<Detection> &objects, const 
 		std::vector<float> coords{ output.bboxes[i].x0, output.bboxes[i].y0,
 								   output.bboxes[i].x1 - output.bboxes[i].x0,
 								   output.bboxes[i].y1 - output.bboxes[i].y0 };
+
+		LOG(2, "Orginal coords: " << coords[0] << " " << coords[1] << " " << coords[2] << " " << coords[3]);
 		const Rectangle obj_scaled = ConvertInferenceCoordinates(coords, scaler_crop);
+
+		LOG(2, "Convert coordinates - coords: " << coords[0] << " " << coords[1] << " " << coords[2] << " " << coords[3] << " obj_scaled: " << obj_scaled << " scaler_crop: " << scaler_crop);
 
 		objects.emplace_back(class_index, classes_[class_index], output.scores[i],
 							 obj_scaled.x, obj_scaled.y, obj_scaled.width, obj_scaled.height);
@@ -278,7 +279,7 @@ int ObjectDetection::processOutputTensor(std::vector<Detection> &objects, const 
 
 	LOG(2, "Number of objects detected: " << objects.size());
 	for (unsigned i = 0; i < objects.size(); i++)
-		LOG(2, "[" << i << "] : " << objects[i].toString());
+		LOG(2, "detected object: [" << i << "] : " << objects[i].toString());
 
 	return 0;
 }

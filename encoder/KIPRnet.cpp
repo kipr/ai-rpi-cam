@@ -91,7 +91,7 @@ bool KIPRnet::KIPRencode(CompletedRequestPtr &completed_request, Stream *stream)
 	header_count++;
 	header_buff->header_seq = header_count;
 
-cout << "KIPRencode - objects found: " << object_count << " Header size: " << header_buff->length << " header_seq: " << header_count << endl;
+	LOG(1, "KIPRencode - objects found: " << object_count << " Header size: " << header_buff->length << " header_seq: " << header_count );
 
 	memcpy( &header_buff->buffer[sizeof(int)], &object_count, sizeof(int));
 
@@ -110,7 +110,7 @@ cout << "KIPRencode - objects found: " << object_count << " Header size: " << he
 		object_struct->box.y = detection.box.y;
 		object_struct->box.height = detection.box.height;
 
-                cout << detection.toString() << endl;
+                LOG(2, "KIPRencode detection list: " << detection.toString());
 		int name_size = detection.name.size();
 		if(name_size > MAX_NAME_LEN)
 			name_size = MAX_NAME_LEN;
@@ -252,7 +252,7 @@ void KIPRnet::videoThread()
 		memcpy(header_buffer->buffer, &image_size, sizeof(int));
 
 		sock.sendTo(header_buffer->buffer, header_buffer->length, "192.168.1.1", 9000);
-		cout << "KIPR - sending frame " << total_pack << " object_count: " << object_count << " Header size: " << header_buffer->length << " header_seq " << header_buffer->header_seq << "image_size: " << image_size << endl;
+		LOG(2, "KIPR - sending frame " << total_pack << " object_count: " << object_count << " Header size: " << header_buffer->length << " image_size: " << image_size << " header_seq " << header_buffer->header_seq);
 
 /*DEBUG*/	//HexDump(&encoded[0], 16);
 		if (video_output == 1)

@@ -25,6 +25,34 @@ public:
 	static constexpr unsigned int Max_Num_Tensors = 16;
 	static constexpr unsigned int Max_Num_Dimensions = 16;
 	static constexpr unsigned int Network_Name_Len = 64;
+	static constexpr unsigned int NetworkNameLen = 64;
+
+	enum class MODEL_TYPE
+	{
+		YOLO11n,
+		nano,
+		mobilnetv2
+	};
+
+#define MODEL_DEFAULT "mobilnetv2"
+
+	const std::unordered_map<std::string, MODEL_TYPE> stringToEnumMap =
+	{
+		{"YOLO11n", MODEL_TYPE::YOLO11n},
+		{"nano",    MODEL_TYPE::nano},
+		{"mobilnetv2", MODEL_TYPE::mobilnetv2}
+	};
+
+	enum BBOX_NORMALIZATION_TYPE
+	{
+		YX,
+		XY
+	};
+
+#define BBOX_NORMALIZATION_DEFAULT "yx"
+
+	MODEL_TYPE model;
+	BBOX_NORMALIZATION_TYPE bbox_normalization;
 
 	struct OutputTensorInfo
 	{
@@ -39,6 +67,22 @@ public:
 		uint32_t num_tensors;
 		OutputTensorInfo info[Max_Num_Tensors];
 	};
+
+	struct CnnInputTensorInfo {
+		char networkName[NetworkNameLen];
+		uint32_t width;
+		uint32_t height;
+		uint32_t numChannels;
+	};
+
+#define INPUT_TENSOR_WIDTH 640
+#define INPUT_TENSOR_HEIGHT 480
+
+	uint32_t Input_Tensor_width;
+	uint32_t Input_Tensor_height;
+
+	std::string model_;
+	std::string bbox_normalization_;
 
 	KIPRPostProcessingStage(RPiCamApp *app);
 	~KIPRPostProcessingStage();

@@ -115,10 +115,37 @@ void KIPRPostProcessingStage::Read(boost::property_tree::ptree const &params)
 		div_shift_ = pt.get<unsigned int>("div_shift", 0);
 	}
 
+	/* setup the model parameters  */
+
+        model_ = params.get<std::string>("model", MODEL_DEFAULT);
+	bbox_normalization_ = params.get<std::string>("bbox_normalization", BBOX_NORMALIZATION_DEFAULT);
+
+        LOG(1,  "KIPR PostProcessing Setup" << " model: " << model_ << " bbox normalization: " << bbox_normalization_ );
+
+	auto it = stringToEnumMap.find(model_);
+
+	if( it == stringToEnumMap.end())
+		throw std::runtime_error("KIPR PostProcessing Setup - " + model_ + " is an invalid model");
+
+	model = it->second;
+
+	if(bbox_normalization_ == "yx")
+		bbox_normalization = YX;
+	else
+		bbox_normalization = XY;
+
+	/* set the Input Tensor box */
+	/* we set the max the IMX500 can handle here and adjust when the model gets loaded */
+
+	Input_Tensor_width = INPUT_TENSOR_WIDTH;
+	Input_Tensor_height = INPUT_TENSOR_HEIGHT;
+
 	/* Load the network firmware. */
 	std::string network_file = params.get<std::string>("network_file");
 	if (!fs::exists(network_file))
 		throw std::runtime_error(network_file + " not found!");
+
+	LOG(1, "KIPR PostProcessing Setup - opening network file: " << network_file);
 
 	int fd = open(network_file.c_str(), O_RDONLY, 0);
 
@@ -132,6 +159,7 @@ void KIPRPostProcessingStage::Read(boost::property_tree::ptree const &params)
 	LOG(1, "\n------------------------------------------------------------------------------------------------------------------\n"
 		"NOTE: (KIPR) Loading network firmware onto the IMX500 can take several minutes, please do not close down the application."
 		"\n------------------------------------------------------------------------------------------------------------------\n");
+        fflush(NULL);
 }
 
 void KIPRPostProcessingStage::Configure()
@@ -144,6 +172,22 @@ void KIPRPostProcessingStage::Configure()
 bool KIPRPostProcessingStage::Process(CompletedRequestPtr &completed_request)
 {
 	auto input = completed_request->metadata.get(controls::rpi::CnnInputTensor);
+	auto input_tensor_info_ = completed_request->metadata.get(controls::rpi::CnnInputTensorInfo);
+
+	if(input_tensor_info_.has_value())
+	{
+		CnnInputTensorInfo input_tensor_info =
+			*reinterpret_cast<const CnnInputTensorInfo *>(input_tensor_info_->data());
+		LOG(2, "CnnInputTensorInfo " << input_tensor_info.width <<
+			 " " << input_tensor_info.height << " " << input_tensor_info.numChannels);
+
+		Input_Tensor_width = input_tensor_info.width;
+		Input_Tensor_height = input_tensor_info.height;
+	}
+	else
+	{
+		LOG(2, "CnnInputTensorInfo has no value");
+	}
 
 	if (input && input_tensor_file_.is_open())
 	{
@@ -175,7 +219,9 @@ Rectangle KIPRPostProcessingStage::ConvertInferenceCoordinates(const std::vector
 	const Rectangle sensor_crop = scaler_crop.scaledBy(sensor_output_size, full_sensor_resolution_.size());
 
 /*DEBUG-KIPR*/
-
+	LOG(2, "isp_output_size: " << isp_output_size << " sensor_output_size: " << sensor_output_size);
+	LOG(2, "sensor_crop: " << sensor_crop);
+	LOG(2, "full_sensor_Resolution: " << full_sensor_resolution_);
 	LOG(2, "CIP coords: " << coords[0] << " " << coords[1] << " " << coords[2] << " " << coords[3]);
 
 	if (coords.size() != 4)
@@ -184,36 +230,54 @@ Rectangle KIPRPostProcessingStage::ConvertInferenceCoordinates(const std::vector
 	// Object scaled to the full sensor resolution
 	Rectangle obj;
 
-	if((coords[0] < 1) && (coords[1] < 1) && (coords[2] < 1) && (coords[3] < 1))
+	switch(model)
 	{
-		// mobilnetv2 fpnlite support
-		obj.x = std::round(coords[0] * (full_sensor_resolution_.width - 1));
-		obj.y = std::round(coords[1] * (full_sensor_resolution_.height - 1));
-		obj.width = std::round(coords[2] * (full_sensor_resolution_.width - 1));
-		obj.height = std::round(coords[3] * (full_sensor_resolution_.height - 1));
+		case MODEL_TYPE::mobilnetv2:
+		{
+			// mobilnetv2 fpnlite support
+			obj.x = std::round(coords[0] * (full_sensor_resolution_.width - 1));
+			obj.y = std::round(coords[1] * (full_sensor_resolution_.height - 1));
+			obj.width = std::round(coords[2] * (full_sensor_resolution_.width - 1));
+			obj.height = std::round(coords[3] * (full_sensor_resolution_.height - 1));
 
-		// Object on inference image -> sensor image
-		const Rectangle obj_sensor = obj.scaledBy(sensor_output_size, full_sensor_resolution_.size());
-		// -> bounded to the ISP crop on the sensor image
-		const Rectangle obj_bound = obj_sensor.boundedTo(sensor_crop);
-		// -> translated by the start of the crop offset
-		const Rectangle obj_translated = obj_bound.translatedBy(-sensor_crop.topLeft());
-		// -> and finally scaled to the ISP output.
-		const Rectangle obj_scaled = obj_translated.scaledBy(isp_output_size, sensor_crop.size());
-
-		LOG(2, obj << " -> (sensor) " << obj_sensor << " -> (bound) " << obj_bound
+			// Object on inference image -> sensor image
+			const Rectangle obj_sensor =
+					obj.scaledBy(sensor_output_size, full_sensor_resolution_.size());
+			// -> bounded to the ISP crop on the sensor image
+			const Rectangle obj_bound = obj_sensor.boundedTo(sensor_crop);
+			// -> translated by the start of the crop offset
+			const Rectangle obj_translated = obj_bound.translatedBy(-sensor_crop.topLeft());
+			// -> and finally scaled to the ISP output.
+			const Rectangle obj_scaled = obj_translated.scaledBy(isp_output_size, sensor_crop.size());
+			LOG(2, "mobilnetv2 obj " << obj << " -> (sensor) " << obj_sensor << " -> (bound) " << obj_bound
                            << " -> (translate) " << obj_translated << " -> (scaled) " << obj_scaled);
-		return obj_scaled;
-	}
-	else
-	{
-		// YOLO11n support (bbox = xy)
-		obj.x = coords[1];
-		obj.y = coords[0] / 1.33;
-		obj.width = coords[3];
-		obj.height = coords[2] / 1.33;
+			return obj_scaled;
+			break;
+		}
+		case MODEL_TYPE::YOLO11n:
+		case MODEL_TYPE::nano:
+                {
+			 // YOLO11n support (bbox = xy)
 
-		LOG(2, obj);
+			if(bbox_normalization == XY)
+			{
+				obj.x = coords[0] * isp_output_size.width / Input_Tensor_width;
+				obj.y = coords[1] * isp_output_size.height / Input_Tensor_height;
+				obj.width = coords[2] * isp_output_size.width / Input_Tensor_width;
+				obj.height = coords[3] * isp_output_size.height / Input_Tensor_height;
+			}
+			else
+			{
+				obj.x = coords[0] * isp_output_size.width / Input_Tensor_width;
+				obj.y = coords[1] * isp_output_size.height / Input_Tensor_height;
+				obj.width = coords[3] * isp_output_size.width / Input_Tensor_width;
+				obj.height = coords[2] * isp_output_size.height / Input_Tensor_height;
+			}
+
+                        LOG(2, "integer object: " << obj);
+                        return obj;
+                        break;
+                }
 	}
 
 	return obj;
